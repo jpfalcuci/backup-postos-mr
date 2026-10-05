@@ -1,0 +1,21 @@
+{
+  "Posto": "ppp",
+  "Remoto": "onedrive",
+  "PastaRemota": "Backup PostosMR/rclone/ppp",
+  "HoraCompleto": "21:00",
+  "LimiteBanda": "06:00,512k 23:00,off",
+  "Pastas": [
+    {
+      "Nome": "TACGas3",
+      "Caminho": "C:\\Rezende\\TACGas3",
+      "Filtro": [],
+      "Excluir": [
+        "Dados/**",
+        "LOG/**",
+        "*.fdb",
+        "*.fbk"
+      ],
+      "Rapido": true
+    }
+  ]
+}

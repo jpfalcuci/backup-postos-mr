@@ -1,0 +1,8 @@
+# local: binario, teste, login e configuracao da maquina de desenvolvimento
+bin/
+teste/
+rclone.conf
+config.json
+logs/
+healthchecks.txt
+*.zip
