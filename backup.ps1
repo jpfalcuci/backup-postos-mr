@@ -22,10 +22,13 @@ function Avisar($corpo) {
     catch { Escrever "Aviso ao healthchecks falhou: $($_.Exception.Message)" }
 }
 
-# Uma execucao por vez: se o completo estiver rodando, o rapido sai sem fazer nada.
+# Uma execucao por vez. O completo espera o rapido terminar (ate 30 min); o rapido nao espera o
+# completo e sai avisando que esta vivo (o completo tem limite de 12 h na tarefa agendada).
 $trava = New-Object System.Threading.Mutex($false, 'Global\BackupPostos')
-# Conta como sinal de vida: o completo que esta rodando tem limite de 12 h na tarefa agendada.
-if (-not $trava.WaitOne(0)) { Escrever "$Modo ignorado: outra execucao em andamento."; Avisar "Posto $($cfg.Posto), $Modo ignorado: completo em andamento"; exit 0 }
+$espera = if ($Modo -eq 'Completo') { [TimeSpan]::FromMinutes(30) } else { [TimeSpan]::Zero }
+try { $peguei = $trava.WaitOne($espera) }
+catch [System.Threading.AbandonedMutexException] { $peguei = $true }   # execucao anterior foi encerrada a forca
+if (-not $peguei) { Escrever "$Modo ignorado: outra execucao em andamento."; Avisar "Posto $($cfg.Posto), $Modo ignorado: outra execucao em andamento"; exit 0 }
 try {
     $carimbo = Get-Date -Format 'yyyy-MM-dd_HHmmss'
     $falhas = @()
