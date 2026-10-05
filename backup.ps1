@@ -51,6 +51,22 @@ try {
         & $rclone @parametros
         if ($LASTEXITCODE -ne 0) { $falhas += "$($p.Nome) (codigo $LASTEXITCODE)" }
     }
+    # Unica exclusao no destino: no completo, apaga pastas de _versoes mais antigas que VersoesDias
+    # (padrao 30). A idade vem do nome da pasta (data do envio), nunca da data dos arquivos.
+    if ($Modo -eq 'Completo') {
+        $dias = if ($cfg.VersoesDias) { [int]$cfg.VersoesDias } else { 30 }
+        $versoes = "$($cfg.Remoto):$($cfg.PastaRemota)/_versoes"
+        $conf = Join-Path $Pasta 'rclone.conf'
+        foreach ($pastaVersao in (& $rclone lsf $versoes --dirs-only --config $conf 2>$null)) {
+            $nome = $pastaVersao.TrimEnd('/')
+            if ($nome -notmatch '^\d{4}-\d{2}-\d{2}_\d{6}$') { continue }
+            $quando = [datetime]::ParseExact($nome, 'yyyy-MM-dd_HHmmss', $null)
+            if ($quando -lt (Get-Date).AddDays(-$dias)) {
+                & $rclone purge "$versoes/$nome" --config $conf --log-file $log --log-level INFO
+                Escrever "Versoes de $nome apagadas (mais de $dias dias)."
+            }
+        }
+    }
     if ($falhas) { Escrever "FALHA: $($falhas -join ', ')"; exit 1 }
     Escrever "== $Modo concluido sem erros"
     Avisar "Posto $($cfg.Posto), modo $Modo ok"

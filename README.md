@@ -1,9 +1,10 @@
 # Backup dos postos para o OneDrive
 
 Copia a pasta do sistema TACGas3 (XMLs de NFC-e/NF-e, configurações e programas) de cada posto
-para uma pasta do OneDrive, usando o [rclone](https://rclone.org). **Nunca apaga nada no destino**:
-arquivo apagado no posto continua no OneDrive, e arquivo alterado tem a versão anterior guardada em
-`_versoes/<data-hora>/`.
+para uma pasta do OneDrive, usando o [rclone](https://rclone.org). Arquivo apagado no posto
+**continua no OneDrive**, e arquivo alterado tem a versão anterior guardada em `_versoes/<data-hora>/`.
+A única coisa que o backup apaga no destino são essas versões anteriores, depois de 30 dias
+(`VersoesDias`).
 
 Um vigia externo, o [healthchecks.io](https://healthchecks.io), manda alerta no Telegram se um
 posto ficar mais de 2 horas sem backup bem-sucedido: máquina desligada, sem internet, tarefa parada
@@ -54,6 +55,7 @@ Fica em [`postos/`](postos). Os campos:
 | `PastaRemota` | destino dentro do OneDrive da conta de backup |
 | `HoraCompleto` | horário do completo diário (máquina precisa estar ligada) |
 | `LimiteBanda` | formato do `--bwlimit` do rclone, ex. `06:00,512k 23:00,off` |
+| `VersoesDias` | dias que as versões anteriores ficam em `_versoes` (padrão 30) |
 | `Pastas[].Caminho` | pasta local copiada |
 | `Pastas[].Excluir` | padrões que não vão (`Dados/**`, `*.fdb`) |
 | `Pastas[].Filtro` | se preenchido, só esses padrões vão (vazio = tudo) |
