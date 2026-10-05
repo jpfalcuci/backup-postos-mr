@@ -15,7 +15,7 @@ Abra o **PowerShell como administrador** no posto e cole a linha abaixo, trocand
 posto (`acesso`, `itirapua`, `janjao` ou `ppp`):
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\backup-postos"; iwr https://github.com/jpfalcuci/backup-postos/archive/refs/heads/main.zip -OutFile "$d.zip" -UseBasicParsing; Expand-Archive "$d.zip" $d -Force; powershell -ExecutionPolicy Bypass -File "$d\backup-postos-main\instalar.ps1" -Posto acesso
+[Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\backup-postos-mr"; iwr https://github.com/jpfalcuci/backup-postos-mr/archive/refs/heads/main.zip -OutFile "$d.zip" -UseBasicParsing; Expand-Archive "$d.zip" $d -Force; powershell -ExecutionPolicy Bypass -File "$d\backup-postos-mr-main\instalar.ps1" -Posto acesso
 ```
 
 Na primeira vez, o instalador:
@@ -64,7 +64,7 @@ O endereço do healthchecks **não** fica neste repositório: é informado na in
 ## Desinstalar
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:TEMP\backup-postos\backup-postos-main\desinstalar.ps1" -ApagarPasta
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\backup-postos-mr\backup-postos-mr-main\desinstalar.ps1" -ApagarPasta
 ```
 
 Remove as tarefas e `C:\BackupPostos`. Nada é apagado no OneDrive.
