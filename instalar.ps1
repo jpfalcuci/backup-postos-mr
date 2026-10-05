@@ -82,8 +82,10 @@ if ($LASTEXITCODE -ne 0) { throw "Sem acesso a $destinoRemoto. Confira a conta e
 Write-Host "Destino no OneDrive acessivel: $destinoRemoto"
 
 $quem = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+# Caminho completo: em alguns postos o PATH do sistema nao acha o powershell.exe (tarefa falha com 0x80070002).
+$powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 function Acao($modo) {
-    New-ScheduledTaskAction -Execute 'powershell.exe' `
+    New-ScheduledTaskAction -Execute $powershell -WorkingDirectory $Destino `
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Destino\backup.ps1`" -Modo $modo"
 }
 $base = @{ MultipleInstances = 'IgnoreNew'; StartWhenAvailable = $true; AllowStartIfOnBatteries = $true; DontStopIfGoingOnBatteries = $true }
@@ -94,6 +96,18 @@ Register-ScheduledTask -TaskName 'Backup Postos - Rapido' -Force -Principal $que
 Register-ScheduledTask -TaskName 'Backup Postos - Completo' -Force -Principal $quem -Action (Acao 'Completo') `
     -Trigger (New-ScheduledTaskTrigger -Daily -At $horaCompleto) `
     -Settings (New-ScheduledTaskSettingsSet @base -ExecutionTimeLimit (New-TimeSpan -Hours 12)) | Out-Null
+
+# Teste: roda o rapido agora pelo agendador (como SYSTEM) e mostra o resultado.
+Write-Host ''
+Write-Host 'Testando a tarefa rapida (pode levar alguns minutos)...'
+Start-ScheduledTask -TaskName 'Backup Postos - Rapido'
+$limite = (Get-Date).AddMinutes(15)
+do { Start-Sleep 5 } while ((Get-ScheduledTask -TaskName 'Backup Postos - Rapido').State -eq 'Running' -and (Get-Date) -lt $limite)
+$resultado = (Get-ScheduledTaskInfo -TaskName 'Backup Postos - Rapido').LastTaskResult
+$ultimoLog = Get-ChildItem (Join-Path $Destino 'logs') -Filter '*rapido.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+if ($ultimoLog) { Get-Content $ultimoLog.FullName -Tail 8 | ForEach-Object { Write-Host "   $_" } }
+if ($resultado -ne 0) { Write-Warning ("A tarefa rapida terminou com codigo {0} (0x{0:X8}). Confira o log acima." -f $resultado) }
+else { Write-Host 'Tarefa rapida OK.' }
 
 Write-Host ''
 Write-Host "Instalado. Tarefas criadas: 'Backup Postos - Rapido' (15 min) e 'Backup Postos - Completo' ($horaCompleto)."
