@@ -57,7 +57,7 @@ try {
         $dias = if ($cfg.VersoesDias) { [int]$cfg.VersoesDias } else { 30 }
         $versoes = "$($cfg.Remoto):$($cfg.PastaRemota)/_versoes"
         $conf = Join-Path $Pasta 'rclone.conf'
-        foreach ($pastaVersao in (& $rclone lsf $versoes --dirs-only --config $conf 2>$null)) {
+        foreach ($pastaVersao in (& $rclone lsf $versoes --dirs-only --config $conf --log-file $log --log-level ERROR)) {
             $nome = $pastaVersao.TrimEnd('/')
             if ($nome -notmatch '^\d{4}-\d{2}-\d{2}_\d{6}$') { continue }
             $quando = [datetime]::ParseExact($nome, 'yyyy-MM-dd_HHmmss', $null)
@@ -66,6 +66,49 @@ try {
                 Escrever "Versoes de $nome apagadas (mais de $dias dias)."
             }
         }
+    }
+    # Relatorio do completo em <PastaRemota>/_status/ultimo.txt, para conferir o posto sem acesso remoto:
+    # o que ficou de fora do OneDrive (rclone check), erros do log, disco e resultado das tarefas.
+    if ($Modo -eq 'Completo') {
+        try {
+            $conf = Join-Path $Pasta 'rclone.conf'
+            $rel = New-Object System.Collections.Generic.List[string]
+            $rel.Add("Posto $($cfg.Posto) - relatorio do completo de $(Get-Date -Format 'dd/MM/yyyy HH:mm')")
+            $rel.Add('Envio: ' + $(if ($falhas) { 'FALHOU em ' + ($falhas -join ', ') } else { 'ok' }))
+            $disco = Get-PSDrive C
+            $rel.Add(('Disco C: {0:N1} GB livres de {1:N1} GB' -f ($disco.Free/1GB), (($disco.Free + $disco.Used)/1GB)))
+            foreach ($t in Get-ScheduledTask -TaskName 'Backup Postos*' -ErrorAction SilentlyContinue) {
+                $info = $t | Get-ScheduledTaskInfo
+                $rel.Add(('Tarefa {0}: ultima {1:dd/MM HH:mm}, resultado {2}' -f $t.TaskName, $info.LastRunTime, $info.LastTaskResult))
+            }
+            foreach ($p in $cfg.Pastas) {
+                $combinado = Join-Path $env:TEMP 'backup-postos-check.txt'
+                $chk = @('check', $p.Caminho, "$($cfg.Remoto):$($cfg.PastaRemota)/$($p.Nome)", '--one-way', '--size-only',
+                    '--ignore-case', '--combined', $combinado, '--config', $conf, '--log-file', $log, '--log-level', 'ERROR')
+                foreach ($x in @($p.Excluir | Where-Object { $_ })) { $chk += @('--filter', "- $x") }
+                $incluir = @($p.Filtro | Where-Object { $_ })
+                foreach ($f in $incluir) { $chk += @('--filter', "+ $f") }
+                if ($incluir) { $chk += @('--filter', '- **') }
+                & $rclone @chk | Out-Null
+                $linhas = @(Get-Content $combinado -Encoding UTF8 -ErrorAction SilentlyContinue)
+                $problemas = @($linhas | Where-Object { $_ -notmatch '^= ' })
+                $rel.Add('')
+                $rel.Add("Conferencia $($p.Nome): $(@($linhas | Where-Object { $_ -match '^= ' }).Count) iguais, $($problemas.Count) faltando ou diferentes no OneDrive (+ falta, * diferente)")
+                foreach ($l in ($problemas | Select-Object -First 50)) {
+                    $arq = Get-Item -LiteralPath (Join-Path $p.Caminho $l.Substring(2)) -ErrorAction SilentlyContinue
+                    $rel.Add(('  {0} {1:dd/MM/yyyy HH:mm} {2,10:N0} bytes  {3}' -f $l.Substring(0, 1), $arq.LastWriteTime, $arq.Length, $l.Substring(2)))
+                }
+                Remove-Item $combinado -ErrorAction SilentlyContinue
+            }
+            $rel.Add('')
+            $rel.Add('Erros nos logs das ultimas 24 h (ate 30):')
+            Get-ChildItem $logs -Filter *.log | Where-Object LastWriteTime -gt (Get-Date).AddDays(-1) |
+                Get-Content -Encoding UTF8 | Select-String 'Failed to copy|FALHA|Relatorio nao' | Select-Object -Last 30 | ForEach-Object { $rel.Add('  ' + $_.Line) }
+            $arquivoRel = Join-Path $Pasta 'ultimo-relatorio.txt'
+            $rel | Set-Content $arquivoRel -Encoding UTF8
+            & $rclone copyto $arquivoRel "$($cfg.Remoto):$($cfg.PastaRemota)/_status/ultimo.txt" --config $conf --log-file $log --log-level ERROR
+        }
+        catch { Escrever "Relatorio nao gerado: $($_.Exception.Message)" }
     }
     if ($falhas) { Escrever "FALHA: $($falhas -join ', ')"; exit 1 }
     Escrever "== $Modo concluido sem erros"

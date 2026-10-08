@@ -43,6 +43,10 @@ endereço do healthchecks. Tudo fica em `C:\BackupPostos`, pasta que só adminis
   `LOG`, que mudam o tempo todo.
 - `LimiteBanda` segura o envio durante o expediente para não tomar a internet do posto.
 
+Cada completo grava um relatório em `<PastaRemota>/_status/ultimo.txt` no OneDrive: o que ficou
+de fora (conferência arquivo a arquivo), erros recentes, espaço em disco e resultado das tarefas.
+Dá para acompanhar o posto sem acesso remoto.
+
 Para rodar o completo na hora: `Start-ScheduledTask 'Backup Postos - Completo'`.
 Logs: `C:\BackupPostos\logs`.
 
