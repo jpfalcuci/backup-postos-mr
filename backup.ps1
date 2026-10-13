@@ -51,6 +51,64 @@ try {
         & $rclone @parametros
         if ($LASTEXITCODE -ne 0) { $falhas += "$($p.Nome) (codigo $LASTEXITCODE)" }
     }
+    # Banco Firebird: no completo, GBAK (copia consistente com o sistema em uso), compacta e envia para
+    # <PastaRemota>/banco/<nome>_<data>.zip, guardando Banco.Dias dias (padrao 7). Usuario e senha vem do
+    # TacON.ini do proprio posto (base64), nunca da configuracao nem do repositorio.
+    $bancoResumo = $null
+    if ($Modo -eq 'Completo' -and $cfg.Banco) {
+        $b = $cfg.Banco
+        $pastaBanco = Join-Path $Pasta 'banco'
+        try {
+            $ini = Get-Content $b.Credenciais -Encoding UTF8
+            function Ler64($chave) { [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String((($ini | Select-String "^$chave=" | Select-Object -First 1).Line -replace "^$chave=", '').Trim())) }
+            $env:ISC_USER = Ler64 'User'; $env:ISC_PASSWORD = Ler64 'Pass'   # gbak le daqui; nao aparece na linha de comando
+            $nomeBase = [IO.Path]::GetFileNameWithoutExtension($b.Arquivo)
+            $tamanhoBanco = (Get-Item -LiteralPath $b.Arquivo).Length
+            $livre = (Get-PSDrive ([IO.Path]::GetPathRoot($Pasta).Substring(0, 1))).Free
+            if ($livre -lt $tamanhoBanco * 1.5) { throw ('pouco espaco em disco: {0:N1} GB livres para um banco de {1:N1} GB' -f ($livre/1GB), ($tamanhoBanco/1GB)) }
+            Remove-Item $pastaBanco -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory $pastaBanco | Out-Null
+            $fbk = Join-Path $pastaBanco "$nomeBase.fbk"
+            $zip = Join-Path $pastaBanco ('{0}_{1:yyyy-MM-dd}.zip' -f $nomeBase, (Get-Date))
+            Escrever "== Banco: GBAK de $($b.Arquivo)"
+            $inicio = Get-Date
+            # No PowerShell 5.1, stderr de programa com ErrorActionPreference=Stop vira excecao: o codigo de saida decide.
+            $ErrorActionPreference = 'Continue'
+            $saidaGbak = & $b.Gbak -b -g "127.0.0.1:$($b.Arquivo)" $fbk 2>&1
+            $codigoGbak = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            if ($codigoGbak -ne 0 -or -not (Test-Path $fbk) -or (Get-Item $fbk).Length -eq 0) {
+                throw "GBAK falhou (codigo $codigoGbak): $(($saidaGbak | Select-Object -Last 3) -join ' | ')"
+            }
+            $minGbak = ((Get-Date) - $inicio).TotalMinutes
+            Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+            $arquivoZip = [IO.Compression.ZipFile]::Open($zip, 'Create')
+            try { [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($arquivoZip, $fbk, "$nomeBase.fbk", 'Optimal') }
+            finally { $arquivoZip.Dispose() }
+            $remotoBanco = "$($cfg.Remoto):$($cfg.PastaRemota)/banco"
+            $conf = Join-Path $Pasta 'rclone.conf'
+            $envio = @('copyto', $zip, "$remotoBanco/$(Split-Path $zip -Leaf)", '--config', $conf, '--log-file', $log, '--log-level', 'INFO', '--retries', '3')
+            if ($cfg.LimiteBanda) { $envio += @('--bwlimit', $cfg.LimiteBanda) }
+            & $rclone @envio
+            if ($LASTEXITCODE -ne 0) { throw "envio do banco falhou (codigo $LASTEXITCODE)" }
+            $bancoResumo = 'ok: GBAK {0:N1} min, {1:N0} MB -> zip {2:N0} MB' -f $minGbak, ((Get-Item $fbk).Length/1MB), ((Get-Item $zip).Length/1MB)
+            Escrever "== Banco $bancoResumo"
+            # Guarda os ultimos Banco.Dias dias, pela data no nome do arquivo.
+            $diasBanco = if ($b.Dias) { [int]$b.Dias } else { 7 }
+            foreach ($antigo in (& $rclone lsf $remotoBanco --files-only --config $conf --log-file $log --log-level ERROR)) {
+                if ($antigo -notmatch '_(\d{4}-\d{2}-\d{2})\.zip$') { continue }
+                if ([datetime]::ParseExact($Matches[1], 'yyyy-MM-dd', $null) -lt (Get-Date).Date.AddDays(-$diasBanco)) {
+                    & $rclone deletefile "$remotoBanco/$antigo" --config $conf --log-file $log --log-level INFO
+                    Escrever "Backup do banco $antigo apagado (mais de $diasBanco dias)."
+                }
+            }
+        }
+        catch { $bancoResumo = "FALHOU: $($_.Exception.Message)"; $falhas += 'banco'; Escrever "FALHA banco: $($_.Exception.Message)" }
+        finally {
+            Remove-Item Env:\ISC_USER, Env:\ISC_PASSWORD -ErrorAction SilentlyContinue
+            Remove-Item $pastaBanco -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
     # Unica exclusao no destino: no completo, apaga pastas de _versoes mais antigas que VersoesDias
     # (padrao 30). A idade vem do nome da pasta (data do envio), nunca da data dos arquivos.
     if ($Modo -eq 'Completo') {
@@ -75,6 +133,7 @@ try {
             $rel = New-Object System.Collections.Generic.List[string]
             $rel.Add("Posto $($cfg.Posto) - relatorio do completo de $(Get-Date -Format 'dd/MM/yyyy HH:mm')")
             $rel.Add('Envio: ' + $(if ($falhas) { 'FALHOU em ' + ($falhas -join ', ') } else { 'ok' }))
+            if ($bancoResumo) { $rel.Add("Banco: $bancoResumo") }
             $disco = Get-PSDrive C
             $rel.Add(('Disco C: {0:N1} GB livres de {1:N1} GB' -f ($disco.Free/1GB), (($disco.Free + $disco.Used)/1GB)))
             foreach ($t in Get-ScheduledTask -TaskName 'Backup Postos*' -ErrorAction SilentlyContinue) {

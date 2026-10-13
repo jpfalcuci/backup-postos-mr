@@ -39,8 +39,12 @@ endereço do healthchecks. Tudo fica em `C:\BackupPostos`, pasta que só adminis
 
 - Se a máquina estava desligada na hora do completo, ele roda assim que ela ligar.
 - Arquivo antigo colocado na pasta (cópia preserva a data) só sobe no completo.
-- Ficam de fora o banco Firebird (`Dados`, `*.fdb`, `*.fbk`), que não pode ser copiado em uso, e os
-  `LOG`, que mudam o tempo todo.
+- Ficam de fora da cópia de arquivos o banco Firebird (`Dados`, `*.fdb`, `*.fbk`), que não pode ser
+  copiado em uso, e os `LOG`, que mudam o tempo todo.
+- O banco tem backup próprio no completo: o `GBAK` do sistema gera uma cópia consistente com o
+  sistema aberto, que é compactada e enviada para `<PastaRemota>/banco/TG3_<data>.zip`. Ficam os
+  últimos 7 dias (`Banco.Dias`). Usuário e senha são lidos do `TacON.ini` do próprio posto; nenhuma
+  senha fica neste repositório.
 - `LimiteBanda` segura o envio durante o expediente para não tomar a internet do posto.
 
 Cada completo grava um relatório em `<PastaRemota>/_status/ultimo.txt` no OneDrive: o que ficou
@@ -60,6 +64,7 @@ Fica em [`postos/`](postos). Os campos:
 | `HoraCompleto` | horário do completo diário (máquina precisa estar ligada) |
 | `LimiteBanda` | formato do `--bwlimit` do rclone, ex. `06:00,512k 23:00,off` |
 | `VersoesDias` | dias que as versões anteriores ficam em `_versoes` (padrão 30) |
+| `Banco` | backup do Firebird: `Arquivo` (.FDB), `Gbak`, `Credenciais` (ini com `User`/`Pass` em base64) e `Dias` |
 | `Pastas[].Caminho` | pasta local copiada |
 | `Pastas[].Excluir` | padrões que não vão (`Dados/**`, `*.fdb`) |
 | `Pastas[].Filtro` | se preenchido, só esses padrões vão (vazio = tudo) |

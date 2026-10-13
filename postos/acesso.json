@@ -17,5 +17,11 @@
       ],
       "Rapido": true
     }
-  ]
+  ],
+  "Banco": {
+    "Arquivo": "C:\\Rezende\\TACGas3\\Dados\\TG3.FDB",
+    "Gbak": "C:\\Rezende\\TACGas3\\GBAK.exe",
+    "Credenciais": "C:\\Rezende\\TACGas3\\TacON.ini",
+    "Dias": 7
+  }
 }
