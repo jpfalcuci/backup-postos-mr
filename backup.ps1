@@ -162,7 +162,9 @@ try {
             $rel.Add('')
             $rel.Add('Erros nos logs das ultimas 24 h (ate 30):')
             Get-ChildItem $logs -Filter *.log | Where-Object LastWriteTime -gt (Get-Date).AddDays(-1) |
-                Get-Content -Encoding UTF8 | Select-String 'Failed to copy|FALHA|Relatorio nao' | Select-Object -Last 30 | ForEach-Object { $rel.Add('  ' + $_.Line) }
+                Get-Content -Encoding UTF8 | Select-String 'Failed to copy|FALHA|Relatorio nao' |
+                Where-Object { $_.Line -match '^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})' -and [datetime]::ParseExact($Matches[1], 'yyyy/MM/dd HH:mm:ss', $null) -gt (Get-Date).AddDays(-1) } |
+                Select-Object -Last 30 | ForEach-Object { $rel.Add('  ' + $_.Line) }
             $arquivoRel = Join-Path $Pasta 'ultimo-relatorio.txt'
             $rel | Set-Content $arquivoRel -Encoding UTF8
             & $rclone copyto $arquivoRel "$($cfg.Remoto):$($cfg.PastaRemota)/_status/ultimo.txt" --config $conf --log-file $log --log-level ERROR
