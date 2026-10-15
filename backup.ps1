@@ -61,7 +61,8 @@ try {
         try {
             $ini = Get-Content $b.Credenciais -Encoding UTF8
             function Ler64($chave) { [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String((($ini | Select-String "^$chave=" | Select-Object -First 1).Line -replace "^$chave=", '').Trim())) }
-            $env:ISC_USER = Ler64 'User'; $env:ISC_PASSWORD = Ler64 'Pass'   # gbak le daqui; nao aparece na linha de comando
+            # O gbak le usuario e senha destas variaveis de ambiente; assim nao aparecem na linha de comando.
+            foreach ($par in @(@('ISC_USER', 'User'), @('ISC_PASSWORD', 'Pass'))) { [Environment]::SetEnvironmentVariable($par[0], (Ler64 $par[1])) }
             $nomeBase = [IO.Path]::GetFileNameWithoutExtension($b.Arquivo)
             $tamanhoBanco = (Get-Item -LiteralPath $b.Arquivo).Length
             $livre = (Get-PSDrive ([IO.Path]::GetPathRoot($Pasta).Substring(0, 1))).Free
