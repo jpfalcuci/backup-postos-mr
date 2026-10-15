@@ -11,7 +11,8 @@
       "Filtro": [],
       "Excluir": [
         "Dados/**",
-        "LOG/**",
+        "danfe/**",
+        "LOG*/**",
         "*.fdb",
         "*.fbk"
       ],
