@@ -109,7 +109,9 @@ function Acao($modo) {
 }
 $base = @{ MultipleInstances = 'IgnoreNew'; StartWhenAvailable = $true; AllowStartIfOnBatteries = $true; DontStopIfGoingOnBatteries = $true }
 
-$rapido = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 15)
+# A primeira rodada agendada fica para depois do teste do fim da instalacao (ate 15 min). No PPP, com o
+# teste ainda rodando na hora da primeira rodada, o agendador pulou as rodadas por 2 h (15/10/2026).
+$rapido = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(20) -RepetitionInterval (New-TimeSpan -Minutes 15)
 Register-ScheduledTask -TaskName 'Backup Postos - Rapido' -Force -Principal $quem -Action (Acao 'Rapido') -Trigger $rapido `
     -Settings (New-ScheduledTaskSettingsSet @base -ExecutionTimeLimit (New-TimeSpan -Hours 2)) | Out-Null
 Register-ScheduledTask -TaskName 'Backup Postos - Completo' -Force -Principal $quem -Action (Acao 'Completo') `
