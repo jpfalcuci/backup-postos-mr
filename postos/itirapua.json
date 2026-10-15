@@ -6,12 +6,13 @@
   "LimiteBanda": "06:00,512k 23:00,off",
   "Pastas": [
     {
-      "Nome": "TACGas3",
-      "Caminho": "C:\\Rezende\\TACGas3",
+      "Nome": "TAC",
+      "Caminho": "C:\\Rezende\\TAC",
       "Filtro": [],
       "Excluir": [
         "Dados/**",
-        "LOG/**",
+        "danfe/**",
+        "LOG*/**",
         "*.fdb",
         "*.fbk"
       ],
@@ -19,9 +20,9 @@
     }
   ],
   "Banco": {
-    "Arquivo": "C:\\Rezende\\TACGas3\\Dados\\TG3.FDB",
-    "Gbak": "C:\\Rezende\\TACGas3\\GBAK.exe",
-    "Credenciais": "C:\\Rezende\\TACGas3\\TacON.ini",
+    "Arquivo": "C:\\Rezende\\TAC\\Dados\\TG3.FDB",
+    "Gbak": "C:\\Rezende\\TAC\\GBAK.exe",
+    "Credenciais": "C:\\BackupPostos\\banco.ini",
     "Dias": 7
   }
 }

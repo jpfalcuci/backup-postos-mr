@@ -44,6 +44,25 @@ New-Item -ItemType Directory -Force $Destino | Out-Null
 & icacls $Destino /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao restringir permissoes da pasta.' }
 Copy-Item (Join-Path $PSScriptRoot 'backup.ps1') $Destino -Force
+
+# Posto sem TacON.ini: a configuracao aponta a credencial do banco para um arquivo dentro de $Destino,
+# criado aqui com usuario e senha informados agora (mesmo formato do TacON.ini: base64).
+if ($cfg.Banco -and -not (Test-Path -LiteralPath $cfg.Banco.Credenciais)) {
+    if (-not $cfg.Banco.Credenciais.StartsWith($Destino, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Credencial do banco nao encontrada: $($cfg.Banco.Credenciais)"
+    }
+    Write-Host ''
+    Write-Host "Informe o acesso ao banco Firebird deste posto (fica so nesta maquina, em $($cfg.Banco.Credenciais))."
+    $usuario = Read-Host 'Usuario [SYSDBA]'
+    if (-not $usuario) { $usuario = 'SYSDBA' }
+    $segredo = Read-Host 'Senha' -AsSecureString
+    $texto = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($segredo))
+    $linhas = @('[Banco]')
+    foreach ($par in @(@('User', $usuario), @('Pass', $texto))) {
+        $linhas += ('{0}={1}' -f $par[0], [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($par[1])))
+    }
+    Set-Content -LiteralPath $cfg.Banco.Credenciais -Encoding ASCII -Value $linhas
+}
 $cfg | ConvertTo-Json -Depth 5 | Set-Content $instalado -Encoding UTF8
 
 $rclone = Join-Path $Destino 'rclone.exe'
