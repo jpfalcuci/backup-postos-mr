@@ -32,26 +32,7 @@ if (-not $peguei) { Escrever "$Modo ignorado: outra execucao em andamento."; Avi
 try {
     $carimbo = Get-Date -Format 'yyyy-MM-dd_HHmmss'
     $falhas = @()
-    foreach ($p in $cfg.Pastas) {
-        if ($Modo -eq 'Rapido' -and -not $p.Rapido) { continue }
-        $destino = "$($cfg.Remoto):$($cfg.PastaRemota)/$($p.Nome)"
-        $parametros = @('copy', $p.Caminho, $destino,
-            '--backup-dir', "$($cfg.Remoto):$($cfg.PastaRemota)/_versoes/$carimbo/$($p.Nome)",
-            '--config', (Join-Path $Pasta 'rclone.conf'), '--log-file', $log, '--log-level', 'INFO',
-            '--retries', '3', '--low-level-retries', '10', '--transfers', '4', '--stats', '0', '--ignore-case')
-        # Ex.: "07:00,1M 23:00,off" = ate 1 MB/s das 07h as 23h, livre no resto (protege a internet do posto).
-        if ($cfg.LimiteBanda) { $parametros += @('--bwlimit', $cfg.LimiteBanda) }
-        # Regras na ordem: primeiro o que fica de fora (Excluir), depois o que entra (Filtro; vazio = tudo).
-        $incluir = @($p.Filtro | Where-Object { $_ })
-        foreach ($x in @($p.Excluir | Where-Object { $_ })) { $parametros += @('--filter', "- $x") }
-        foreach ($f in $incluir) { $parametros += @('--filter', "+ $f") }
-        if ($incluir) { $parametros += @('--filter', '- **') }
-        if ($Modo -eq 'Rapido') { $parametros += @('--max-age', '48h', '--no-traverse') }
-        Escrever "== $Modo $($p.Nome): $($p.Caminho) -> $destino"
-        & $rclone @parametros
-        if ($LASTEXITCODE -ne 0) { $falhas += "$($p.Nome) (codigo $LASTEXITCODE)" }
-    }
-    # Banco Firebird: no completo, GBAK (copia consistente com o sistema em uso), compacta e envia para
+    # Banco Firebird, primeiro no completo: GBAK (copia consistente com o sistema em uso), compacta e envia para
     # <PastaRemota>/banco/<nome>_<data>.zip, guardando Banco.Dias dias (padrao 7). Usuario e senha vem do
     # TacON.ini do proprio posto (base64), nunca da configuracao nem do repositorio.
     $bancoResumo = $null
@@ -109,6 +90,27 @@ try {
             Remove-Item Env:\ISC_USER, Env:\ISC_PASSWORD -ErrorAction SilentlyContinue
             Remove-Item $pastaBanco -Recurse -Force -ErrorAction SilentlyContinue
         }
+    }
+    # Copia dos arquivos. No completo vem depois do banco: a primeira carga de um posto pode passar do
+    # limite de 12 h da tarefa, e o banco (minutos) nao pode ficar esperando por ela.
+    foreach ($p in $cfg.Pastas) {
+        if ($Modo -eq 'Rapido' -and -not $p.Rapido) { continue }
+        $destino = "$($cfg.Remoto):$($cfg.PastaRemota)/$($p.Nome)"
+        $parametros = @('copy', $p.Caminho, $destino,
+            '--backup-dir', "$($cfg.Remoto):$($cfg.PastaRemota)/_versoes/$carimbo/$($p.Nome)",
+            '--config', (Join-Path $Pasta 'rclone.conf'), '--log-file', $log, '--log-level', 'INFO',
+            '--retries', '3', '--low-level-retries', '10', '--transfers', '4', '--stats', '0', '--ignore-case')
+        # Ex.: "07:00,1M 23:00,off" = ate 1 MB/s das 07h as 23h, livre no resto (protege a internet do posto).
+        if ($cfg.LimiteBanda) { $parametros += @('--bwlimit', $cfg.LimiteBanda) }
+        # Regras na ordem: primeiro o que fica de fora (Excluir), depois o que entra (Filtro; vazio = tudo).
+        $incluir = @($p.Filtro | Where-Object { $_ })
+        foreach ($x in @($p.Excluir | Where-Object { $_ })) { $parametros += @('--filter', "- $x") }
+        foreach ($f in $incluir) { $parametros += @('--filter', "+ $f") }
+        if ($incluir) { $parametros += @('--filter', '- **') }
+        if ($Modo -eq 'Rapido') { $parametros += @('--max-age', '48h', '--no-traverse') }
+        Escrever "== $Modo $($p.Nome): $($p.Caminho) -> $destino"
+        & $rclone @parametros
+        if ($LASTEXITCODE -ne 0) { $falhas += "$($p.Nome) (codigo $LASTEXITCODE)" }
     }
     # Unica exclusao no destino: no completo, apaga pastas de _versoes mais antigas que VersoesDias
     # (padrao 30). A idade vem do nome da pasta (data do envio), nunca da data dos arquivos.
