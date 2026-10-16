@@ -133,6 +133,10 @@ try {
             $conf = Join-Path $Pasta 'rclone.conf'
             $rel = New-Object System.Collections.Generic.List[string]
             $rel.Add("Posto $($cfg.Posto) - relatorio do completo de $(Get-Date -Format 'dd/MM/yyyy HH:mm')")
+            $versao = Get-Content (Join-Path $Pasta 'versao.txt') -ErrorAction SilentlyContinue | Select-Object -First 1
+            $ultimaAtualizacao = Get-ChildItem $logs -Filter '*atualizacao.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime |
+                Select-Object -Last 1 | Get-Content -Encoding UTF8 | Select-Object -Last 1
+            $rel.Add('Versao: ' + $(if ($versao) { $versao.Substring(0, 7) } else { 'instalada a mao' }) + $(if ($ultimaAtualizacao) { " | ultima atualizacao: $ultimaAtualizacao" } else { '' }))
             $rel.Add('Envio: ' + $(if ($falhas) { 'FALHOU em ' + ($falhas -join ', ') } else { 'ok' }))
             if ($bancoResumo) { $rel.Add("Banco: $bancoResumo") }
             $disco = Get-PSDrive C

@@ -6,13 +6,16 @@
 # Uso, em PowerShell como administrador:
 #   powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -Posto acesso      (usa postos\acesso.json)
 #   powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -Config C:\x.json  (configuracao avulsa)
+# Tambem cria "Backup Postos - Atualizar" (1x por dia), que roda o atualizar.ps1: ele baixa a versao do ramo
+# producao do GitHub e chama este instalador com -Atualizacao (sem perguntas e sem o teste do fim).
 # Rodar de novo atualiza scripts, configuracao e tarefas, mantendo o login e o endereco do healthchecks.
 #Requires -RunAsAdministrator
 param(
     [string]$Posto,
     [string]$Config,
     [string]$Healthcheck,
-    [string]$Destino = 'C:\BackupPostos'
+    [string]$Destino = 'C:\BackupPostos',
+    [switch]$Atualizacao
 )
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -35,15 +38,15 @@ if (-not $Healthcheck -and (Test-Path $instalado)) {
     $Healthcheck = (Get-Content $instalado -Raw -Encoding UTF8 | ConvertFrom-Json).HealthcheckUrl
 }
 if (-not $Healthcheck) { $Healthcheck = $cfg.HealthcheckUrl }
-if (-not $Healthcheck) { $Healthcheck = Read-Host 'Endereco de ping do healthchecks deste posto (Enter para nenhum)' }
-$cfg | Add-Member HealthcheckUrl $Healthcheck.Trim() -Force
+if (-not $Healthcheck -and -not $Atualizacao) { $Healthcheck = Read-Host 'Endereco de ping do healthchecks deste posto (Enter para nenhum)' }
+$cfg | Add-Member HealthcheckUrl "$Healthcheck".Trim() -Force
 
 Write-Host "Instalando $($cfg.Posto) em $Destino ..."
 New-Item -ItemType Directory -Force $Destino | Out-Null
 # A pasta guarda o acesso ao OneDrive: so SYSTEM e administradores podem ler.
 & icacls $Destino /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao restringir permissoes da pasta.' }
-Copy-Item (Join-Path $PSScriptRoot 'backup.ps1') $Destino -Force
+Copy-Item (Join-Path $PSScriptRoot 'backup.ps1'), (Join-Path $PSScriptRoot 'atualizar.ps1') $Destino -Force
 
 # Posto sem TacON.ini: a configuracao aponta a credencial do banco para um arquivo dentro de $Destino,
 # criado aqui com usuario e senha informados agora (mesmo formato do TacON.ini: base64).
@@ -51,6 +54,7 @@ if ($cfg.Banco -and -not (Test-Path -LiteralPath $cfg.Banco.Credenciais)) {
     if (-not $cfg.Banco.Credenciais.StartsWith($Destino, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Credencial do banco nao encontrada: $($cfg.Banco.Credenciais)"
     }
+    if ($Atualizacao) { throw "Credencial do banco nao encontrada: $($cfg.Banco.Credenciais). Rode o instalador a mao." }
     Write-Host ''
     Write-Host "Informe o acesso ao banco Firebird deste posto (fica so nesta maquina, em $($cfg.Banco.Credenciais))."
     $usuario = Read-Host 'Usuario [SYSDBA]'
@@ -81,6 +85,8 @@ if ($versaoAtual -ne $RcloneVersao) {
 $conf = Join-Path $Destino 'rclone.conf'
 if (Test-Path $conf) {
     Write-Host 'Conta do OneDrive ja conectada; mantendo rclone.conf existente.'
+} elseif ($Atualizacao) {
+    throw 'OneDrive nao conectado (falta rclone.conf). Rode o instalador a mao.'
 } else {
     Write-Host ''
     Write-Host 'O navegador vai abrir para entrar na conta do OneDrive DO BACKUP.'
@@ -107,6 +113,7 @@ function Acao($modo) {
     New-ScheduledTaskAction -Execute $powershell -WorkingDirectory $Destino `
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Destino\backup.ps1`" -Modo $modo"
 }
+$horaAtualizacao = if ($cfg.HoraAtualizacao) { $cfg.HoraAtualizacao } else { '06:00' }
 $base = @{ MultipleInstances = 'IgnoreNew'; StartWhenAvailable = $true; AllowStartIfOnBatteries = $true; DontStopIfGoingOnBatteries = $true }
 
 # A primeira rodada agendada fica para depois do teste do fim da instalacao (ate 15 min). No PPP, com o
@@ -117,6 +124,14 @@ Register-ScheduledTask -TaskName 'Backup Postos - Rapido' -Force -Principal $que
 Register-ScheduledTask -TaskName 'Backup Postos - Completo' -Force -Principal $quem -Action (Acao 'Completo') `
     -Trigger (New-ScheduledTaskTrigger -Daily -At $horaCompleto) `
     -Settings (New-ScheduledTaskSettingsSet @base -ExecutionTimeLimit (New-TimeSpan -Hours 12)) | Out-Null
+# Na atualizacao automatica esta tarefa e a que esta rodando: nao e recriada por baixo dela.
+if (-not $Atualizacao -or -not (Get-ScheduledTask -TaskName 'Backup Postos - Atualizar' -ErrorAction SilentlyContinue)) {
+    Register-ScheduledTask -TaskName 'Backup Postos - Atualizar' -Force -Principal $quem `
+        -Action (New-ScheduledTaskAction -Execute $powershell -WorkingDirectory $Destino -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Destino\atualizar.ps1`"") `
+        -Trigger (New-ScheduledTaskTrigger -Daily -At $horaAtualizacao) `
+        -Settings (New-ScheduledTaskSettingsSet @base -ExecutionTimeLimit (New-TimeSpan -Hours 2)) | Out-Null
+}
+if ($Atualizacao) { Write-Host "Atualizado $($cfg.Posto)."; exit 0 }
 
 # Teste: roda o rapido agora pelo agendador (como SYSTEM) e mostra o resultado.
 Write-Host ''
@@ -131,5 +146,5 @@ if ($resultado -ne 0) { Write-Warning ("A tarefa rapida terminou com codigo {0} 
 else { Write-Host 'Tarefa rapida OK.' }
 
 Write-Host ''
-Write-Host "Instalado. Tarefas criadas: 'Backup Postos - Rapido' (15 min) e 'Backup Postos - Completo' ($horaCompleto)."
+Write-Host "Instalado. Tarefas: 'Backup Postos - Rapido' (15 min), 'Backup Postos - Completo' ($horaCompleto) e 'Backup Postos - Atualizar' ($horaAtualizacao)."
 Write-Host "Logs em $Destino\logs. Para rodar o completo agora: Start-ScheduledTask 'Backup Postos - Completo'"

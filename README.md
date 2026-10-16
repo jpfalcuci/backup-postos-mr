@@ -16,26 +16,46 @@ Abra o **PowerShell como administrador** no posto e cole a linha abaixo, trocand
 posto (`acesso`, `itirapua`, `janjao` ou `ppp`):
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\backup-postos-mr"; iwr https://github.com/jpfalcuci/backup-postos-mr/archive/refs/heads/main.zip -OutFile "$d.zip" -UseBasicParsing; Expand-Archive "$d.zip" $d -Force; powershell -ExecutionPolicy Bypass -File "$d\backup-postos-mr-main\instalar.ps1" -Posto acesso
+[Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\backup-postos-mr"; iwr https://github.com/jpfalcuci/backup-postos-mr/archive/refs/heads/producao.zip -OutFile "$d.zip" -UseBasicParsing; Expand-Archive "$d.zip" $d -Force; powershell -ExecutionPolicy Bypass -File "$d\backup-postos-mr-producao\instalar.ps1" -Posto acesso
 ```
 
 Na primeira vez, o instalador:
 
 1. pergunta o **endereço de ping do healthchecks** do posto (`https://hc-ping.com/...`);
-2. baixa o rclone e confere o hash do arquivo;
-3. abre o navegador para entrar na **conta do OneDrive do backup** (se o navegador estiver logado
+2. se o posto não tem `TacON.ini`, pergunta usuário e senha do banco Firebird (ficam em
+   `C:\BackupPostos\banco.ini`);
+3. baixa o rclone e confere o hash do arquivo;
+4. abre o navegador para entrar na **conta do OneDrive do backup** (se o navegador estiver logado
    em outra conta, cole o link numa janela anônima);
-4. cria as tarefas agendadas, que rodam como SYSTEM mesmo sem ninguém logado.
+5. cria as tarefas agendadas, que rodam como SYSTEM mesmo sem ninguém logado.
 
-Rodar a mesma linha de novo **atualiza** scripts, configuração e tarefas, mantendo o login e o
-endereço do healthchecks. Tudo fica em `C:\BackupPostos`, pasta que só administradores abrem.
+Depois disso o posto **se atualiza sozinho**, uma vez por dia (veja abaixo). Rodar a mesma linha de
+novo também atualiza, mantendo o login, o endereço do healthchecks e a senha do banco. Tudo fica em
+`C:\BackupPostos`, pasta que só administradores abrem.
+
+## Atualização automática
+
+A tarefa `Backup Postos - Atualizar` (06:00, ou assim que a máquina ligar) compara a versão
+instalada com o ramo **`producao`** deste repositório. Se houver versão nova, baixa, confere a
+sintaxe dos scripts e a configuração do posto, espera o backup em andamento terminar e reinstala sem
+perguntar nada. Se algo falhar, a versão atual continua rodando e a falha aparece no relatório.
+
+Só chega aos postos o que estiver em `producao`. O trabalho é feito e testado em `main`; para
+publicar:
+
+```bash
+git push origin main:producao
+```
+
+O relatório diário mostra a versão (commit) que cada posto está rodando.
 
 ## Como funciona
 
 | Tarefa | Quando | O que faz |
 |---|---|---|
 | Backup Postos - Rapido | a cada 15 min | envia o que mudou nas últimas 48 h |
-| Backup Postos - Completo | 1x por dia (`HoraCompleto`) | compara tudo e envia o que faltar |
+| Backup Postos - Completo | 1x por dia (`HoraCompleto`) | compara tudo, envia o que faltar, faz o backup do banco e grava o relatório |
+| Backup Postos - Atualizar | 1x por dia (`HoraAtualizacao`, padrão 06:00) | instala a versão nova do ramo `producao`, se houver |
 
 - Se a máquina estava desligada na hora do completo, ele roda assim que ela ligar.
 - Arquivo antigo colocado na pasta (cópia preserva a data) só sobe no completo.
@@ -43,8 +63,8 @@ endereço do healthchecks. Tudo fica em `C:\BackupPostos`, pasta que só adminis
   copiado em uso, e os `LOG`, que mudam o tempo todo.
 - O banco tem backup próprio no completo: o `GBAK` do sistema gera uma cópia consistente com o
   sistema aberto, que é compactada e enviada para `<PastaRemota>/banco/TG3_<data>.zip`. Ficam os
-  últimos 7 dias (`Banco.Dias`). Usuário e senha são lidos do `TacON.ini` do próprio posto; nenhuma
-  senha fica neste repositório.
+  últimos 7 dias (`Banco.Dias`). Usuário e senha são lidos do `TacON.ini` do próprio posto, ou do
+  `C:\BackupPostos\banco.ini` criado na instalação; nenhuma senha fica neste repositório.
 - `LimiteBanda` segura o envio durante o expediente para não tomar a internet do posto.
 
 Cada completo grava um relatório em `<PastaRemota>/_status/ultimo.txt` no OneDrive: o que ficou
@@ -75,7 +95,7 @@ O endereço do healthchecks **não** fica neste repositório: é informado na in
 ## Desinstalar
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:TEMP\backup-postos-mr\backup-postos-mr-main\desinstalar.ps1" -ApagarPasta
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\backup-postos-mr\backup-postos-mr-producao\desinstalar.ps1" -ApagarPasta
 ```
 
 Remove as tarefas e `C:\BackupPostos`. Nada é apagado no OneDrive.

@@ -2,7 +2,7 @@
 #Requires -RunAsAdministrator
 param([string]$Destino = 'C:\BackupPostos', [switch]$ApagarPasta)
 $ErrorActionPreference = 'Stop'
-foreach ($t in 'Backup Postos - Rapido', 'Backup Postos - Completo') {
+foreach ($t in 'Backup Postos - Rapido', 'Backup Postos - Completo', 'Backup Postos - Atualizar') {
     if (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue) {
         Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $t -Confirm:$false
