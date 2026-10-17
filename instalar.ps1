@@ -51,9 +51,13 @@ Copy-Item (Join-Path $PSScriptRoot 'backup.ps1'), (Join-Path $PSScriptRoot 'atua
 # Posto sem TacON.ini: a configuracao aponta a credencial do banco para um arquivo dentro de $Destino,
 # criado aqui com usuario e senha informados agora (mesmo formato do TacON.ini: base64).
 if ($cfg.Banco -and -not (Test-Path -LiteralPath $cfg.Banco.Credenciais)) {
+    # Configurado para o TacON.ini, mas o posto nao tem: usa (ou cria) o banco.ini local.
     if (-not $cfg.Banco.Credenciais.StartsWith($Destino, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Credencial do banco nao encontrada: $($cfg.Banco.Credenciais)"
+        Write-Host "Nao existe $($cfg.Banco.Credenciais); a credencial do banco fica em $Destino\banco.ini."
+        $cfg.Banco.Credenciais = Join-Path $Destino 'banco.ini'
     }
+}
+if ($cfg.Banco -and -not (Test-Path -LiteralPath $cfg.Banco.Credenciais)) {
     if ($Atualizacao) { throw "Credencial do banco nao encontrada: $($cfg.Banco.Credenciais). Rode o instalador a mao." }
     Write-Host ''
     Write-Host "Informe o acesso ao banco Firebird deste posto (fica so nesta maquina, em $($cfg.Banco.Credenciais))."
