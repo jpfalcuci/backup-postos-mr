@@ -91,6 +91,12 @@ try {
             Remove-Item $pastaBanco -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
+    if ($bancoResumo) {
+        # O relatorio completo so sai no fim; numa primeira carga longa isso leva dias. O banco avisa ja.
+        $arquivoBanco = Join-Path $Pasta 'ultimo-banco.txt'
+        ('{0:dd/MM/yyyy HH:mm} Posto {1} - Banco: {2}' -f (Get-Date), $cfg.Posto, $bancoResumo) | Set-Content $arquivoBanco -Encoding UTF8
+        & $rclone copyto $arquivoBanco "$($cfg.Remoto):$($cfg.PastaRemota)/_status/banco.txt" --config (Join-Path $Pasta 'rclone.conf') --log-file $log --log-level ERROR
+    }
     # Copia dos arquivos. No completo vem depois do banco: a primeira carga de um posto pode passar do
     # limite de 12 h da tarefa, e o banco (minutos) nao pode ficar esperando por ela.
     foreach ($p in $cfg.Pastas) {

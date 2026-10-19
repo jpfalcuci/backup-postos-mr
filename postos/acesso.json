@@ -13,7 +13,8 @@
         "Dados/**",
         "LOG/**",
         "*.fdb",
-        "*.fbk"
+        "*.fbk",
+        "desktop.ini"
       ],
       "Rapido": true
     }

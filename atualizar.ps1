@@ -42,7 +42,8 @@ try {
     try {
         # No PowerShell 5.1, stderr de programa com ErrorActionPreference=Stop vira excecao: o codigo de saida decide.
         $ErrorActionPreference = 'Continue'
-        $saida = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $pacote 'instalar.ps1') -Posto $cfg.Posto -Destino $Destino -Atualizacao 2>&1
+        $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $saida = & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $pacote 'instalar.ps1') -Posto $cfg.Posto -Destino $Destino -Atualizacao 2>&1
         $codigo = $LASTEXITCODE
         $ErrorActionPreference = 'Stop'
     }
