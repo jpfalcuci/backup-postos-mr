@@ -44,7 +44,8 @@ $cfg | Add-Member HealthcheckUrl "$Healthcheck".Trim() -Force
 Write-Host "Instalando $($cfg.Posto) em $Destino ..."
 New-Item -ItemType Directory -Force $Destino | Out-Null
 # A pasta guarda o acesso ao OneDrive: so SYSTEM e administradores podem ler.
-& icacls $Destino /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+# Caminho completo: no acesso o PATH do SYSTEM nao tem nem o System32.
+& (Join-Path $env:SystemRoot 'System32\icacls.exe') $Destino /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao restringir permissoes da pasta.' }
 Copy-Item (Join-Path $PSScriptRoot 'backup.ps1'), (Join-Path $PSScriptRoot 'atualizar.ps1') $Destino -Force
 
