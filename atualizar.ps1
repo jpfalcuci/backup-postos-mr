@@ -54,4 +54,12 @@ try {
     Escrever "Atualizado de '$atual' para $sha."
 }
 catch { Escrever "FALHA na atualizacao: $($_.Exception.Message)"; exit 1 }
-finally { if ($tmp) { Remove-Item $tmp, "$tmp.zip" -Recurse -Force -ErrorAction SilentlyContinue } }
+finally {
+    if ($tmp) { Remove-Item $tmp, "$tmp.zip" -Recurse -Force -ErrorAction SilentlyContinue }
+    # O log do dia vai para <PastaRemota>/_status/atualizacao.txt: da para ver o resultado sem acesso remoto.
+    try {
+        $c = Get-Content (Join-Path $Destino 'config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        & (Join-Path $Destino 'rclone.exe') copyto $log "$($c.Remoto):$($c.PastaRemota)/_status/atualizacao.txt" --config (Join-Path $Destino 'rclone.conf') --log-level ERROR
+    }
+    catch { }
+}
