@@ -67,6 +67,9 @@ O relatório diário mostra a versão (commit) que cada posto está rodando.
   `C:\BackupPostos\banco.ini` criado na instalação; nenhuma senha fica neste repositório.
 - `LimiteBanda` segura o envio durante o expediente para não tomar a internet do posto.
 
+Se o último backup do banco bem-sucedido tiver mais de 30 horas, o rápido passa a avisar **falha**
+ao healthchecks (o alerta chega mesmo com os arquivos em dia) até o banco voltar a sair.
+
 Cada completo grava um relatório em `<PastaRemota>/_status/ultimo.txt` no OneDrive: o que ficou
 de fora (conferência arquivo a arquivo), erros recentes, espaço em disco e resultado das tarefas.
 Dá para acompanhar o posto sem acesso remoto.

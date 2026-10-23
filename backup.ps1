@@ -16,9 +16,9 @@ function Escrever($texto) { Add-Content -Path $log -Value ('{0:yyyy/MM/dd HH:mm:
 
 # healthchecks.io: cada execucao sem erro avisa "estou vivo". Se o aviso parar de chegar
 # (maquina desligada, sem internet, tarefa parada, erro repetido), o healthchecks manda o alerta.
-function Avisar($corpo) {
+function Avisar($corpo, $sufixo = '') {
     if (-not $cfg.HealthcheckUrl) { return }
-    try { Invoke-RestMethod -Method Post -Uri $cfg.HealthcheckUrl -Body $corpo -TimeoutSec 15 | Out-Null }
+    try { Invoke-RestMethod -Method Post -Uri ($cfg.HealthcheckUrl + $sufixo) -Body $corpo -TimeoutSec 15 | Out-Null }
     catch { Escrever "Aviso ao healthchecks falhou: $($_.Exception.Message)" }
 }
 
@@ -75,6 +75,7 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "envio do banco falhou (codigo $LASTEXITCODE)" }
             $bancoResumo = 'ok: GBAK {0:N1} min, {1:N0} MB -> zip {2:N0} MB' -f $minGbak, ((Get-Item $fbk).Length/1MB), ((Get-Item $zip).Length/1MB)
             Escrever "== Banco $bancoResumo"
+            Set-Content (Join-Path $Pasta 'banco-ok.txt') (Get-Date -Format o) -Encoding ASCII
             # Guarda os ultimos Banco.Dias dias, pela data no nome do arquivo.
             $diasBanco = if ($b.Dias) { [int]$b.Dias } else { 7 }
             foreach ($antigo in (& $rclone lsf $remotoBanco --files-only --config $conf --log-file $log --log-level ERROR)) {
@@ -186,7 +187,16 @@ try {
     }
     if ($falhas) { Escrever "FALHA: $($falhas -join ', ')"; exit 1 }
     Escrever "== $Modo concluido sem erros"
-    Avisar "Posto $($cfg.Posto), modo $Modo ok"
+    # Banco atrasado: sem backup de banco bem-sucedido ha mais de 30 h, o aviso vai como falha (/fail)
+    # e o healthchecks alerta, mesmo com os arquivos em dia. Sem banco-ok.txt (posto recem-instalado),
+    # nao ha como saber e o aviso segue normal.
+    $bancoOk = Join-Path $Pasta 'banco-ok.txt'
+    if ($cfg.Banco -and (Test-Path $bancoOk) -and (Get-Item $bancoOk).LastWriteTime -lt (Get-Date).AddHours(-30)) {
+        $quando = (Get-Item $bancoOk).LastWriteTime.ToString('dd/MM HH:mm')
+        Escrever "ATENCAO: ultimo backup do banco em $quando; avisando falha ao healthchecks."
+        Avisar "Posto $($cfg.Posto): sem backup do banco desde $quando" '/fail'
+    }
+    else { Avisar "Posto $($cfg.Posto), modo $Modo ok" }
 }
 finally {
     $trava.ReleaseMutex()
