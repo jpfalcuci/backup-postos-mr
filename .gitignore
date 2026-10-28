@@ -6,3 +6,4 @@ config.json
 logs/
 healthchecks.txt
 *.zip
+CONTEXTO.md
