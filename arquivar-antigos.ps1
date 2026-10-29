@@ -4,7 +4,8 @@
 #   - XMLs que so existem nas Origens fora da pasta do sistema (ex.: C:\bkp): eles nao estao mais na
 #     pasta do sistema, entao tambem nao estao no backup diario.
 # Destino: <PastaRemota>/arquivo-antigo/<caminho original>. Bancos vao compactados, um por vez (o zip
-# temporario e apagado logo apos o envio); XMLs vao como estao.
+# temporario e apagado logo apos o envio). Os XMLs vao juntos num unico zip (xmls-so-fora-do-sistema.zip),
+# com o caminho original de cada um dentro dele: no PPP eram 413 mil arquivos, que um a um levariam dias.
 #
 # Uso, em PowerShell como administrador (pasta do pacote baixado do GitHub):
 #   powershell -ExecutionPolicy Bypass -File .\arquivar-antigos.ps1 -Listar   so mostra o que encontrou
@@ -114,16 +115,25 @@ if (-not $Apagar) {
         finally { Remove-Item $zip -ErrorAction SilentlyContinue }
     }
     if ($orfaos) {
-        # Lista relativa a raiz do disco; o rclone copy pula o que ja estiver igual na nuvem.
-        $lista = Join-Path $env:TEMP 'arquivo-antigo-xml.txt'
-        [IO.File]::WriteAllLines($lista, [string[]]@($orfaos | ForEach-Object { NomeRemoto $_.FullName }), (New-Object Text.UTF8Encoding($false)))
-        $raiz = [IO.Path]::GetPathRoot($orfaos[0].FullName)
-        $copia = @('copy', $raiz, $remoto, '--files-from', $lista, '--config', $conf, '--log-file', $log, '--log-level', 'INFO', '--retries', '3', '--transfers', '4')
-        if ($cfg.LimiteBanda) { $copia += @('--bwlimit', $cfg.LimiteBanda) }
-        & $rclone @copia
-        if ($LASTEXITCODE -ne 0) { $falhas++; Escrever "FALHA no envio dos XMLs (codigo $LASTEXITCODE); rode de novo para continuar." }
-        else { Escrever "XMLs enviados: $($orfaos.Count)" }
-        Remove-Item $lista -ErrorAction SilentlyContinue
+        $nomeXml = 'xmls-so-fora-do-sistema.zip'
+        if ($ja.ContainsKey($nomeXml) -and $ja[$nomeXml] -gt 0) { Escrever 'XMLs: o zip ja esta na nuvem.' }
+        else {
+            $zipXml = Join-Path $env:TEMP $nomeXml
+            try {
+                Escrever "Juntando $($orfaos.Count) XMLs num zip (pode levar alguns minutos)..."
+                Remove-Item $zipXml -ErrorAction SilentlyContinue
+                $arquivo = [IO.Compression.ZipFile]::Open($zipXml, 'Create')
+                try { foreach ($x in $orfaos) { [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($arquivo, $x.FullName, (NomeRemoto $x.FullName), 'Optimal') } }
+                finally { $arquivo.Dispose() }
+                $envio = @('copyto', $zipXml, "$remoto/$nomeXml", '--config', $conf, '--log-file', $log, '--log-level', 'INFO', '--retries', '3')
+                if ($cfg.LimiteBanda) { $envio += @('--bwlimit', $cfg.LimiteBanda) }
+                & $rclone @envio
+                if ($LASTEXITCODE -ne 0) { throw "envio falhou (codigo $LASTEXITCODE)" }
+                Escrever ('XMLs enviados: {0} arquivos, {1:N2} GB -> zip de {2:N2} GB' -f $orfaos.Count, $gbOrfaos, ((Get-Item $zipXml).Length / 1GB))
+            }
+            catch { $falhas++; Escrever "FALHA no envio dos XMLs: $($_.Exception.Message). Rode de novo para continuar." }
+            finally { Remove-Item $zipXml -ErrorAction SilentlyContinue }
+        }
     }
     Escrever "Fim: $enviados bancos enviados, $pulados ja estavam na nuvem, $falhas falhas."
     if ($falhas) { Escrever 'Rode de novo para tentar o que falhou.' } else { Escrever 'Tudo arquivado. Para liberar o disco, rode com -Apagar.' }
@@ -133,7 +143,7 @@ if (-not $Apagar) {
 # -Apagar: confere cada item na nuvem e so entao apaga, com confirmacao.
 $ja = NaNuvem
 $faltam = @($bancos | Where-Object { $n = (NomeRemoto $_.FullName) + '.zip'; -not ($ja.ContainsKey($n) -and $ja[$n] -gt 0) })
-$faltam += @($orfaos | Where-Object { $n = NomeRemoto $_.FullName; -not ($ja.ContainsKey($n) -and $ja[$n] -eq $_.Length) })
+if ($orfaos -and -not ($ja['xmls-so-fora-do-sistema.zip'] -gt 0)) { $faltam += [pscustomobject]@{ FullName = "zip dos $($orfaos.Count) XMLs" } }
 if ($faltam) {
     Escrever "Ainda nao estao na nuvem $($faltam.Count) itens (ex.: $($faltam[0].FullName)). Rode sem -Apagar primeiro. Nada foi apagado."
     exit 1

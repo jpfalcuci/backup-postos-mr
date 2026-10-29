@@ -97,7 +97,7 @@ O endereço do healthchecks **não** fica neste repositório: é informado na in
 
 ## Arquivar cópias antigas (uso único)
 
-`arquivar-antigos.ps1` envia para `<PastaRemota>/arquivo-antigo/` as cópias antigas do banco (`.fdb`, `.fbk`, `.gdb`, menos o banco em uso e os alterados nos últimos 30 dias) que estão em `C:\bkp` e na pasta do banco, e os XMLs que só existem em `C:\bkp`. Os bancos vão compactados, um por vez. Depois de tudo conferido na nuvem, `-Apagar` libera o disco, com confirmação.
+`arquivar-antigos.ps1` envia para `<PastaRemota>/arquivo-antigo/` as cópias antigas do banco (`.fdb`, `.fbk`, `.gdb`, menos o banco em uso e os alterados nos últimos 30 dias) que estão em `C:\bkp` e na pasta do banco, e os XMLs que só existem em `C:\bkp`. Os bancos vão compactados um por vez, e os XMLs juntos num único zip. Depois de tudo conferido na nuvem, `-Apagar` libera o disco, com confirmação.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "$env:TEMP\backup-postos-mr\backup-postos-mr-producao\arquivar-antigos.ps1" -Listar
