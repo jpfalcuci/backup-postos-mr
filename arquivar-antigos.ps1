@@ -33,7 +33,7 @@ function Escrever($texto) {
     Write-Host $linha
     Add-Content -Path $log -Value $linha -Encoding UTF8
 }
-function NomeRemoto($caminho) { $caminho.Substring([IO.Path]::GetPathRoot($caminho).Length) -replace '\\', '/' }
+function NomeRemoto($caminho) { ($caminho.Substring([IO.Path]::GetPathRoot($caminho).Length) -replace '\\', '/').Normalize() }
 function Dentro($caminho, $pasta) { $caminho.StartsWith($pasta.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) }
 
 $sistema = [IO.Path]::GetFullPath($cfg.Pastas[0].Caminho)
@@ -82,8 +82,13 @@ if ($Listar) {
 # O que ja esta na nuvem (nome -> tamanho), para pular o que foi enviado e para conferir antes de apagar
 function NaNuvem {
     $mapa = @{}
-    foreach ($l in (& $rclone lsf -R --files-only --format 'ps' --separator '|' $remoto --config $conf --log-file $log --log-level ERROR)) {
-        $p = $l -split '\|'; $mapa[$p[0]] = [long]$p[1]
+    # rclone escreve UTF-8; sem isto o PowerShell 5.1 le na pagina do console e "Copia" com acento nao bate.
+    $antes = [Console]::OutputEncoding
+    [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
+    try { $linhas = & $rclone lsf -R --files-only --format 'ps' --separator '|' $remoto --config $conf --log-file $log --log-level ERROR }
+    finally { [Console]::OutputEncoding = $antes }
+    foreach ($l in $linhas) {
+        $p = $l -split '\|'; $mapa[$p[0].Normalize()] = [long]$p[1]
     }
     $mapa
 }
