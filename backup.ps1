@@ -35,10 +35,19 @@ try {
     # Banco Firebird, primeiro no completo: GBAK (copia consistente com o sistema em uso), compacta e envia para
     # <PastaRemota>/banco/<nome>_<data>.zip, guardando Banco.Dias dias (padrao 7). Usuario e senha vem do
     # TacON.ini do proprio posto (base64), nunca da configuracao nem do repositorio.
+    # O rapido tambem faz o banco quando o ultimo bem-sucedido passou de 26 h (o completo da noite nao saiu:
+    # posto sem internet ou desligado na hora, como no Itirapua em 31/10/2026), no maximo uma tentativa
+    # por hora. Assim o banco volta antes do alerta de 30 h, em vez de esperar o completo seguinte.
     $bancoResumo = $null
-    if ($Modo -eq 'Completo' -and $cfg.Banco) {
+    $bancoOk = Join-Path $Pasta 'banco-ok.txt'
+    $tentativaBanco = Join-Path $Pasta 'banco-tentativa.txt'
+    $fazerBanco = $Modo -eq 'Completo' -or ((Test-Path $bancoOk) -and (Get-Item $bancoOk).LastWriteTime -lt (Get-Date).AddHours(-26) -and
+        -not ((Test-Path $tentativaBanco) -and (Get-Item $tentativaBanco).LastWriteTime -gt (Get-Date).AddHours(-1)))
+    if ($fazerBanco -and $cfg.Banco) {
         $b = $cfg.Banco
         $pastaBanco = Join-Path $Pasta 'banco'
+        Set-Content $tentativaBanco (Get-Date -Format o) -Encoding ASCII
+        if ($Modo -eq 'Rapido') { Escrever "Ultimo backup do banco em $((Get-Item $bancoOk).LastWriteTime.ToString('dd/MM HH:mm')): o rapido refaz o banco." }
         try {
             $ini = Get-Content $b.Credenciais -Encoding UTF8
             function Ler64($chave) { [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String((($ini | Select-String "^$chave=" | Select-Object -First 1).Line -replace "^$chave=", '').Trim())) }
@@ -190,7 +199,6 @@ try {
     # Banco atrasado: sem backup de banco bem-sucedido ha mais de 30 h, o aviso vai como falha (/fail)
     # e o healthchecks alerta, mesmo com os arquivos em dia. Sem banco-ok.txt (posto recem-instalado),
     # nao ha como saber e o aviso segue normal.
-    $bancoOk = Join-Path $Pasta 'banco-ok.txt'
     if ($cfg.Banco -and (Test-Path $bancoOk) -and (Get-Item $bancoOk).LastWriteTime -lt (Get-Date).AddHours(-30)) {
         $quando = (Get-Item $bancoOk).LastWriteTime.ToString('dd/MM HH:mm')
         Escrever "ATENCAO: ultimo backup do banco em $quando; avisando falha ao healthchecks."
